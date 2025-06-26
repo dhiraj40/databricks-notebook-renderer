@@ -1,0 +1,70 @@
+{
+  "name": "databricks-notebook-renderer",
+  "displayName": "databricks-notebook-renderer",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.101.0"
+  },
+  "keywords": [
+    "notebookRenderer"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension/extension.js",
+  "browser": "./out/extension/extension.web.js",
+  "contributes": {
+    "notebookRenderer": [
+      {
+        "id": "databricks-notebook-renderer",
+        "entrypoint": "./out/client/index.js",
+        "displayName": "databricks-notebook-renderer",
+        "mimeTypes": ["x-application/custom-json-output"]
+      }
+    ],
+    "notebooks": [
+      {
+        "type": "databricks-notebook-renderer",
+        "displayName": "Databricks Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.py"
+          }
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "webpack --mode production",
+    "lint": "eslint src",
+    "watch": "webpack --mode development --watch",
+    "pretest": "webpack --mode development && npm run lint",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/webpack-env": "^1.18.8",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@types/vscode-notebook-renderer": "^1.72.3",
+    "@types/vscode": "^1.101.0",
+    "css-loader": "^7.1.2",
+    "eslint": "^9.25.1",
+    "fork-ts-checker-webpack-plugin": "^9.1.0",
+    "glob": "^11.0.2",
+    "mocha": "^11.1.0",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "vscode-notebook-error-overlay": "^1.1.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.5.2",
+    "util": "^0.12.5",
+    "webpack": "^5.99.7",
+    "webpack-cli": "^6.0.1"
+  }
+}
