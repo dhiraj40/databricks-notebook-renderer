@@ -3,6 +3,12 @@
   "displayName": "databricks-notebook-renderer",
   "description": "",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dhiraj40/databricks-notebook-renderer.git"
+  },
+  "publisher": "dhiraj-k",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.101.0"
   },
