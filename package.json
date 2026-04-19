@@ -2,7 +2,7 @@
   "name": "databricks-notebook-renderer",
   "displayName": "Databricks Notebook Renderer",
   "description": "VS Code serializer and custom output renderer for Databricks-style source notebooks.",
-  "version": "0.0.1",
+  "version": "0.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/dhiraj40/databricks-notebook-renderer.git"
