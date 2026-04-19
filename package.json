@@ -1,7 +1,7 @@
 {
   "name": "databricks-notebook-renderer",
-  "displayName": "databricks-notebook-renderer",
-  "description": "",
+  "displayName": "Databricks Notebook Renderer",
+  "description": "VS Code serializer and custom output renderer for Databricks-style source notebooks.",
   "version": "0.0.1",
   "repository": {
     "type": "git",
@@ -13,7 +13,10 @@
     "vscode": "^1.101.0"
   },
   "keywords": [
-    "notebookRenderer"
+    "notebookRenderer",
+    "databricks",
+    "notebook",
+    "vscode"
   ],
   "categories": [
     "Other"
@@ -26,14 +29,14 @@
       {
         "id": "databricks-notebook-renderer",
         "entrypoint": "./out/client/index.js",
-        "displayName": "databricks-notebook-renderer",
+        "displayName": "Databricks Notebook Renderer",
         "mimeTypes": ["x-application/custom-json-output"]
       }
     ],
     "notebooks": [
       {
         "type": "databricks-notebook-renderer",
-        "displayName": "Databricks Notebook",
+        "displayName": "Databricks Source Notebook",
         "selector": [
           {
             "filenamePattern": "*.py"
@@ -47,7 +50,7 @@
     "compile": "webpack --mode production",
     "lint": "eslint src",
     "watch": "webpack --mode development --watch",
-    "pretest": "webpack --mode development && npm run lint",
+    "pretest": "webpack --mode development && tsc -p src/test/tsconfig.json && npm run lint",
     "test": "vscode-test"
   },
   "devDependencies": {

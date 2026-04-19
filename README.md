@@ -1,27 +1,72 @@
-# databricks-notebook-renderer README
+# Databricks Notebook Renderer
 
-⚠️ Work-in-progress starter code for custom notebook renderers in VS Code. Expect this to change as notebooks matures. ⚠️
+VS Code extension starter for opening Databricks source notebooks and rendering custom notebook outputs with a Databricks-inspired look.
 
-This starter includes:
+## What It Does
 
- - 🖥️ TypeScript code to create a simple `NotebookOutputRenderer`
- - 📦 A Webpack build for renderer client code
- - ⚡ Support for hot module reloading and safe boilerplate
- - 🎨 CSS modules support
+- Opens Databricks-style `.py` source notebooks as notebook documents.
+- Parses real Databricks markers such as:
+  - `# Databricks notebook source`
+  - `# COMMAND ----------`
+  - `# DBTITLE 1,...`
+  - `# MAGIC %md`, `%sql`, `%scala`, `%python`, `%r`, `%sh`
+- Round-trips language-specific cells back to Databricks source format when the notebook is saved.
+- Renders `x-application/custom-json-output` output items with a richer result panel for summaries, metrics, logs, and tables.
 
-## Running this Sample
+## Quick Start
 
- 1. `code-insiders databricks-notebook-renderer`: Open the folder in VS Code Insiders
- 1. Hit `F5` to build+debug
+1. Install dependencies:
 
-## Structure
+   ```powershell
+   npm install
+   ```
 
-A Notebook Renderer consists of code that runs in the VS Code Extension Host (Node.js), which registers the renderer and passes data into the UI code running inside a WebView (Browser/DOM).
+2. Open the repo in VS Code.
+3. Press `F5` to launch the extension development host.
+4. Open `example/abcd.py` with `Reopen Editor With...` and select `Databricks Notebook`.
+5. Open `example/notebook.ipynb` to preview the custom output renderer.
 
-This uses TypeScript project references. There are three projects in the `src` directory:
+## Output Payload Shape
 
- - `extension` contains the code running in Node.js extension host. It's compiled with `tsc`.
- - `client` is the UI code, built by Webpack, with access to the DOM.
- - `common` contains code shared between the extension and client.
+The custom renderer looks best when the output JSON resembles this shape:
 
-When you run `watch`, `compile`, or `dev`, we invoke both `tsc` and `webpack` to compile the extension and the client portion of the code.
+```json
+{
+  "title": "Revenue by region",
+  "subtitle": "warehouse: analytics-prod",
+  "status": "success",
+  "summary": "Query finished successfully and returned a preview of the result set.",
+  "metrics": [
+    { "label": "Rows", "value": 5 },
+    { "label": "Runtime", "value": "842 ms" }
+  ],
+  "logs": [
+    "Attached to SQL warehouse analytics-prod",
+    "Result limited to 5 rows for preview"
+  ],
+  "table": {
+    "columns": ["region", "orders", "revenue"],
+    "rows": [
+      ["North America", 1240, "$2.4M"],
+      ["EMEA", 980, "$1.9M"]
+    ]
+  }
+}
+```
+
+The renderer also falls back gracefully for plain strings, arrays of objects, simple key/value objects, and raw JSON.
+
+## Project Structure
+
+- `src/extension/extension.ts` registers the notebook serializer.
+- `src/extension/notebookSerializer.ts` handles Databricks source notebook parsing and saving.
+- `src/client/render.ts` renders notebook outputs inside the webview.
+- `src/client/style.css` defines the Databricks-inspired renderer UI.
+
+## Commands
+
+```powershell
+npm run compile
+npm run lint
+npm test
+```
