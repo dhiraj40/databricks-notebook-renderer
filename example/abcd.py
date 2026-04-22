@@ -20,8 +20,13 @@ run_date = "2026-04-19"
 print(f"Revenue pipeline executed for {run_date}")
 
 # COMMAND ----------
-# MAGIC %run ../abc
+# MAGIC %run ./abc
 
 # COMMAND ----------
 # MAGIC %md
 # MAGIC ## Hellow
+
+# COMMAND ----------
+print(a)
+
+# COMMAND ----------

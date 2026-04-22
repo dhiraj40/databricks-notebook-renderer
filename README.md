@@ -11,7 +11,11 @@ VS Code extension starter for opening Databricks source notebooks and rendering 
   - `# DBTITLE 1,...`
   - `# MAGIC %md`, `%sql`, `%scala`, `%python`, `%r`, `%sh`
 - Round-trips language-specific cells back to Databricks source format when the notebook is saved.
+- Discovers a local kernel environment automatically and routes Python, SQL, shell, and Scala cells to the runtimes available on your machine.
+- Expands notebook-relative Python `%run` includes for local execution, including extensionless paths like `%run ./abc`.
+- Updates the visible kernel label from the focused cell language so the notebook UI shows `Python Kernel`, `SQL Kernel`, `Shell Kernel`, or `Scala Kernel`.
 - Renders `x-application/custom-json-output` output items with a richer result panel for summaries, metrics, logs, and tables.
+- Keeps notebook execution code structured around pluggable kernel environments so a future Databricks cluster-backed runtime can be added without reworking cell dispatch.
 
 ## Quick Start
 
@@ -60,6 +64,7 @@ The renderer also falls back gracefully for plain strings, arrays of objects, si
 
 - `src/extension/extension.ts` registers the notebook serializer.
 - `src/extension/notebookSerializer.ts` handles Databricks source notebook parsing and saving.
+- `src/extension/kernel/` contains kernel environment discovery plus language-specific executors.
 - `src/client/render.ts` renders notebook outputs inside the webview.
 - `src/client/style.css` defines the Databricks-inspired renderer UI.
 
