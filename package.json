@@ -2,7 +2,7 @@
   "name": "databricks-notebook-renderer",
   "displayName": "Databricks Notebook Renderer",
   "description": "VS Code serializer and custom output renderer for Databricks-style source notebooks.",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/dhiraj40/databricks-notebook-renderer.git"
@@ -26,6 +26,37 @@
   "main": "./out/extension/extension.js",
   "browser": "./out/extension/extension.web.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "databricksNotebookRenderer.refreshClusters",
+        "title": "Databricks Notebook: Refresh Clusters"
+      },
+      {
+        "command": "databricksNotebookRenderer.previewPythonSource",
+        "title": "Databricks Notebook: Preview Python Source"
+      }
+    ],
+    "configuration": {
+      "title": "Databricks Notebook Renderer",
+      "properties": {
+        "databricksNotebookRenderer.databricksCliPath": {
+          "type": "string",
+          "default": "databricks",
+          "description": "Path to the Databricks CLI executable used to discover clusters."
+        },
+        "databricksNotebookRenderer.databricksProfile": {
+          "type": "string",
+          "default": "",
+          "description": "Optional Databricks CLI profile to use when discovering clusters."
+        },
+        "databricksNotebookRenderer.databricksCommandTimeoutSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 10,
+          "description": "Maximum time to wait for a Databricks remote cell execution to finish."
+        }
+      }
+    },
     "notebookRenderer": [
       {
         "id": "databricks-notebook-renderer",
@@ -37,6 +68,7 @@
       }
     ],
     "notebooks": [
+      
       {
         "type": "databricks-notebook-renderer",
         "displayName": "Databricks Source Notebook",
@@ -46,7 +78,16 @@
           }
         ]
       }
-    ]
+    ],
+    "menus": {
+      "notebook/toolbar": [
+        {
+          "command": "databricksNotebookRenderer.previewPythonSource",
+          "when": "notebookType == databricks-notebook-renderer",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

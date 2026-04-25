@@ -6,6 +6,7 @@ export interface KernelEnvironment {
   readonly id: string;
   readonly label: string;
   readonly description?: string;
+  readonly executionKind?: 'local' | 'databricks';
   readonly supportedLanguages: readonly KernelLanguage[];
   execute(language: KernelLanguage, code: string): Promise<string>;
   dispose(): void | Promise<void>;

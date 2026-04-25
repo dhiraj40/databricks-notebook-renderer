@@ -45,7 +45,11 @@ export class KernelService {
     code: string,
     notebookUri?: vscode.Uri,
   ): Promise<string> {
-    if (language !== 'python' || !notebookUri) {
+    if (
+      this.environment.executionKind !== 'local' ||
+      language !== 'python' ||
+      !notebookUri
+    ) {
       return code;
     }
 

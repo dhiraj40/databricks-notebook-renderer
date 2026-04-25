@@ -146,6 +146,7 @@ class PythonSqlExecutor implements LanguageExecutor {
 
 class LocalKernelEnvironment implements KernelEnvironment {
   private readonly queue = new ExecutionQueue();
+  public readonly executionKind = 'local' as const;
 
   constructor(
     public readonly id: string,

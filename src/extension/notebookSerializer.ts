@@ -266,6 +266,10 @@ export const serializeDatabricksNotebook = (data: vscode.NotebookData): Uint8Arr
   return new TextEncoder().encode(contents);
 };
 
+export const previewSourceForNotebookData = (data: vscode.NotebookData) => {
+  return new TextDecoder().decode(serializeDatabricksNotebook(data));
+};
+
 export const databricksNotebookSerializer: vscode.NotebookSerializer = {
   deserializeNotebook: deserializeDatabricksNotebook,
   serializeNotebook: serializeDatabricksNotebook,

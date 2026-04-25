@@ -1,4 +1,10 @@
 import * as vscode from "vscode";
+import {
+  DatabricksCliClient,
+  parseCommandExecutionResult,
+  parseDatabricksClusters,
+} from "./kernel/DatabricksCli";
+import { createDatabricksClusterEnvironment } from "./kernel/DatabricksClusterEnvironment";
 import { createLocalKernelEnvironment } from "./kernel/LocalKernelEnvironment";
 import { KernelService } from "./kernel/KernelService";
 import { PythonProcess } from "./kernel/PythonProcess";
@@ -10,6 +16,7 @@ import {
 import {
   databricksNotebookSerializer,
   deserializeDatabricksNotebook,
+  previewSourceForNotebookData,
   serializeDatabricksNotebook,
 } from "./notebookSerializer";
 
@@ -17,8 +24,13 @@ export {
   createLocalKernelEnvironment,
   controllerLabelForLanguage,
   databricksNotebookSerializer,
+  DatabricksCliClient,
   deserializeDatabricksNotebook,
   KernelService,
+  createDatabricksClusterEnvironment,
+  previewSourceForNotebookData,
+  parseCommandExecutionResult,
+  parseDatabricksClusters,
   serializeDatabricksNotebook,
   PythonProcess,
 };
@@ -33,70 +45,36 @@ const controllerLabelForLanguage = (
 
   if (!language || !environment.supportedLanguages.includes(language)) {
     const fallbackLanguage = environment.supportedLanguages[0];
+    const fallbackLabel = fallbackLanguage
+      ? `${displayKernelLanguage(fallbackLanguage).replace(/^./, (value) =>
+          value.toUpperCase(),
+        )} Kernel`
+      : environment.label;
+
     return {
-      label: fallbackLanguage
-        ? `${displayKernelLanguage(fallbackLanguage).replace(/^./, (value) =>
-            value.toUpperCase(),
-          )} Kernel`
-        : environment.label,
-      description: "Auto-selected available kernel environment",
+      label: environment.label === "Local Auto"
+        ? fallbackLabel
+        : `${fallbackLabel} (${environment.label})`,
+      description: environment.description ?? "Available kernel environment",
     };
   }
 
   return {
-    label: `${displayKernelLanguage(language).replace(/^./, (value) =>
-      value.toUpperCase(),
-    )} Kernel`,
-    description: "Auto-selected available kernel environment",
+    label: `${
+      displayKernelLanguage(language).replace(/^./, (value) =>
+        value.toUpperCase(),
+      )
+    } Kernel${environment.label === "Local Auto" ? "" : ` (${environment.label})`}`,
+    description: environment.description ?? "Available kernel environment",
   };
 };
 
-const getFocusedCellLanguage = (
-  editor: vscode.NotebookEditor | undefined,
-): string | undefined => {
-  if (!editor || editor.notebook.notebookType !== notebookType) {
-    return undefined;
-  }
-
-  const focusedRange = editor.selections[0] ?? editor.selection;
-  const focusedCellIndex = focusedRange?.start ?? 0;
-
-  if (
-    focusedCellIndex < 0 ||
-    focusedCellIndex >= editor.notebook.cellCount
-  ) {
-    return undefined;
-  }
-
-  return editor.notebook.cellAt(focusedCellIndex).document.languageId;
+type RegisteredController = {
+  controller: vscode.NotebookController;
+  dispose(): void;
 };
 
-const updateControllerPresentation = (
-  controller: vscode.NotebookController,
-  environment: KernelEnvironment,
-  editor: vscode.NotebookEditor | undefined,
-) => {
-  const presentation = controllerLabelForLanguage(
-    environment,
-    getFocusedCellLanguage(editor),
-  );
-  controller.label = presentation.label;
-  controller.description = presentation.description;
-};
-
-const autoPreferController = (
-  controller: vscode.NotebookController,
-  document: vscode.NotebookDocument,
-) => {
-  if (document.notebookType === notebookType) {
-    controller.updateNotebookAffinity(
-      document,
-      vscode.NotebookControllerAffinity.Preferred,
-    );
-  }
-};
-
-const registerKernelController = (
+const createRegisteredController = (
   context: vscode.ExtensionContext,
   environment: KernelEnvironment,
 ) => {
@@ -143,39 +121,193 @@ const registerKernelController = (
     autoPreferController(controller, document);
   }
 
-  context.subscriptions.push(
+  const subscriptions = [
     vscode.workspace.onDidOpenNotebookDocument((document) =>
       autoPreferController(controller, document),
     ),
-  );
-  context.subscriptions.push(
     vscode.window.onDidChangeActiveNotebookEditor((editor) =>
       updateControllerPresentation(controller, environment, editor),
     ),
-  );
-  context.subscriptions.push(
     vscode.window.onDidChangeNotebookEditorSelection((event) =>
       updateControllerPresentation(controller, environment, event.notebookEditor),
     ),
-  );
-  context.subscriptions.push({ dispose: () => kernelService.dispose() });
+  ];
+
   context.subscriptions.push(controller);
+  context.subscriptions.push({ dispose: () => kernelService.dispose() });
+  context.subscriptions.push(...subscriptions);
+
+  return {
+    controller,
+    dispose: () => {
+      for (const subscription of subscriptions) {
+        subscription.dispose();
+      }
+
+      kernelService.dispose();
+      controller.dispose();
+    },
+  } satisfies RegisteredController;
 };
 
-const registerKernelControllers = async (context: vscode.ExtensionContext) => {
-  // New environments, including Databricks clusters later, can be appended here
-  // without changing notebook execution flow.
+class KernelControllerRegistry {
+  private registered: RegisteredController[] = [];
+
+  replace(controllers: RegisteredController[]) {
+    for (const registeredController of this.registered) {
+      registeredController.dispose();
+    }
+
+    this.registered = controllers;
+  }
+
+  dispose() {
+    this.replace([]);
+  }
+}
+
+const notebookDataFromDocument = (document: vscode.NotebookDocument) => {
+  return new vscode.NotebookData(
+    document.getCells().map((cell) => {
+      const notebookCell = new vscode.NotebookCellData(
+        cell.kind,
+        cell.document.getText(),
+        cell.document.languageId,
+      );
+      notebookCell.metadata = cell.metadata;
+      return notebookCell;
+    }),
+  );
+};
+
+const openPythonSourcePreview = async (editor?: vscode.NotebookEditor) => {
+  const activeEditor = editor ?? vscode.window.activeNotebookEditor;
+
+  if (!activeEditor || activeEditor.notebook.notebookType !== notebookType) {
+    throw new Error("Open a Databricks notebook to preview its Python source.");
+  }
+
+  const source = previewSourceForNotebookData(
+    notebookDataFromDocument(activeEditor.notebook),
+  );
+  const preview = await vscode.workspace.openTextDocument({
+    content: source,
+    language: "python",
+  });
+
+  await vscode.window.showTextDocument(preview, {
+    preview: true,
+    viewColumn: vscode.ViewColumn.Beside,
+    preserveFocus: false,
+  });
+};
+
+const createKernelEnvironments = async () => {
   const environments = [await createLocalKernelEnvironment()].filter(
     (environment): environment is KernelEnvironment => Boolean(environment),
   );
+  const databricksClient = new DatabricksCliClient();
 
-  for (const environment of environments) {
-    registerKernelController(context, environment);
+  try {
+    const clusters = await databricksClient.listClusters();
+    environments.push(
+      ...clusters.map((cluster) => createDatabricksClusterEnvironment(cluster)),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Databricks cluster discovery skipped: ${message}`);
+  }
+
+  return environments;
+};
+
+const registerKernelControllers = async (
+  context: vscode.ExtensionContext,
+  registry: KernelControllerRegistry,
+) => {
+  const environments = await createKernelEnvironments();
+  registry.replace(
+    environments.map((environment) =>
+      createRegisteredController(context, environment),
+    ),
+  );
+};
+
+const registerCommands = (
+  context: vscode.ExtensionContext,
+  registry: KernelControllerRegistry,
+) => {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "databricksNotebookRenderer.refreshClusters",
+      async () => {
+        await registerKernelControllers(context, registry);
+        void vscode.window.setStatusBarMessage(
+          "Databricks notebook kernels refreshed.",
+          3000,
+        );
+      },
+    ),
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "databricksNotebookRenderer.previewPythonSource",
+      async (editor?: vscode.NotebookEditor) => {
+        await openPythonSourcePreview(editor);
+      },
+    ),
+  );
+};
+const getFocusedCellLanguage = (
+  editor: vscode.NotebookEditor | undefined,
+): string | undefined => {
+  if (!editor || editor.notebook.notebookType !== notebookType) {
+    return undefined;
+  }
+
+  const focusedRange = editor.selections[0] ?? editor.selection;
+  const focusedCellIndex = focusedRange?.start ?? 0;
+
+  if (
+    focusedCellIndex < 0 ||
+    focusedCellIndex >= editor.notebook.cellCount
+  ) {
+    return undefined;
+  }
+
+  return editor.notebook.cellAt(focusedCellIndex).document.languageId;
+};
+
+const updateControllerPresentation = (
+  controller: vscode.NotebookController,
+  environment: KernelEnvironment,
+  editor: vscode.NotebookEditor | undefined,
+) => {
+  const presentation = controllerLabelForLanguage(
+    environment,
+    getFocusedCellLanguage(editor),
+  );
+  controller.label = presentation.label;
+  controller.description = presentation.description;
+};
+
+const autoPreferController = (
+  controller: vscode.NotebookController,
+  document: vscode.NotebookDocument,
+) => {
+  if (document.notebookType === notebookType) {
+    controller.updateNotebookAffinity(
+      document,
+      vscode.NotebookControllerAffinity.Preferred,
+    );
   }
 };
 
 export async function activate(context: vscode.ExtensionContext) {
-  await registerKernelControllers(context);
+  const registry = new KernelControllerRegistry();
+  context.subscriptions.push({ dispose: () => registry.dispose() });
+  registerCommands(context, registry);
+  await registerKernelControllers(context, registry);
 
   context.subscriptions.push(
     vscode.workspace.registerNotebookSerializer(

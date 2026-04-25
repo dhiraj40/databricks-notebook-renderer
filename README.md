@@ -12,8 +12,10 @@ VS Code extension starter for opening Databricks source notebooks and rendering 
   - `# MAGIC %md`, `%sql`, `%scala`, `%python`, `%r`, `%sh`
 - Round-trips language-specific cells back to Databricks source format when the notebook is saved.
 - Discovers a local kernel environment automatically and routes Python, SQL, shell, and Scala cells to the runtimes available on your machine.
+- Discovers Databricks clusters from the Databricks CLI and adds them to the notebook kernel picker when available.
 - Expands notebook-relative Python `%run` includes for local execution, including extensionless paths like `%run ./abc`.
-- Updates the visible kernel label from the focused cell language so the notebook UI shows `Python Kernel`, `SQL Kernel`, `Shell Kernel`, or `Scala Kernel`.
+- Updates the visible kernel label from the focused cell language so the notebook UI shows `Python Kernel`, `SQL Kernel`, `Shell Kernel`, or `Scala Kernel`, including the selected cluster name when applicable.
+- Executes cells remotely on the selected Databricks cluster through the Databricks CLI-backed command execution APIs.
 - Renders `x-application/custom-json-output` output items with a richer result panel for summaries, metrics, logs, and tables.
 - Keeps notebook execution code structured around pluggable kernel environments so a future Databricks cluster-backed runtime can be added without reworking cell dispatch.
 
@@ -29,6 +31,7 @@ VS Code extension starter for opening Databricks source notebooks and rendering 
 3. Press `F5` to launch the extension development host.
 4. Open `example/abcd.py` with `Reopen Editor With...` and select `Databricks Notebook`.
 5. Open `example/notebook.ipynb` to preview the custom output renderer.
+6. If you have the Databricks CLI configured, use the notebook kernel picker to choose a discovered cluster.
 
 ## Output Payload Shape
 
@@ -69,6 +72,21 @@ The renderer also falls back gracefully for plain strings, arrays of objects, si
 - `src/client/style.css` defines the Databricks-inspired renderer UI.
 
 ## Commands
+
+- `Databricks Notebook: Refresh Clusters` reloads cluster kernels from the Databricks CLI.
+
+## Settings
+
+- `databricksNotebookRenderer.databricksCliPath` sets the Databricks CLI executable path. Default: `databricks`
+- `databricksNotebookRenderer.databricksProfile` optionally selects the Databricks CLI profile used for cluster discovery.
+- `databricksNotebookRenderer.databricksCommandTimeoutSeconds` sets the maximum wait time for a remote Databricks cell execution. Default: `120`
+
+## Remote Execution Notes
+
+- Cluster-backed execution uses the Databricks CLI plus Databricks command execution REST endpoints.
+- Python, SQL, and Scala run directly through Databricks command contexts.
+- Shell cells are sent through a Python command context that runs the shell command on the cluster driver with `bash -lc`.
+- Local `%run` expansion stays enabled only for local kernels. When you run against a Databricks cluster, `%run` is sent to Databricks unchanged.
 
 ```powershell
 npm run compile
