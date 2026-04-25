@@ -93,6 +93,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "webpack --mode production",
     "lint": "eslint src",
+    "package:vsix": "npx @vscode/vsce package",
     "watch": "webpack --mode development --watch",
     "pretest": "webpack --mode development && tsc -p src/test/tsconfig.json && npm run lint",
     "test": "vscode-test"
