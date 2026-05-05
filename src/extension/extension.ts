@@ -16,6 +16,7 @@ import {
 import {
   databricksNotebookSerializer,
   deserializeDatabricksNotebook,
+  isDatabricksNotebookSource,
   previewSourceForNotebookData,
   serializeDatabricksNotebook,
 } from "./notebookSerializer";
@@ -26,6 +27,7 @@ export {
   databricksNotebookSerializer,
   DatabricksCliClient,
   deserializeDatabricksNotebook,
+  isDatabricksNotebookSource,
   KernelService,
   createDatabricksClusterEnvironment,
   previewSourceForNotebookData,
@@ -36,6 +38,11 @@ export {
 };
 
 const notebookType = "databricks-notebook-renderer";
+
+const databricksHeaderExamples = [
+  "# Databricks notebook source",
+  "#Databricks notebook source",
+].join(" or ");
 
 const controllerLabelForLanguage = (
   environment: KernelEnvironment,
@@ -202,6 +209,75 @@ const openPythonSourcePreview = async (editor?: vscode.NotebookEditor) => {
   });
 };
 
+const targetUriFromContext = (
+  target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor,
+) => {
+  if (target instanceof vscode.Uri) {
+    return target;
+  }
+
+  if (target && "notebook" in target) {
+    return target.notebook.uri;
+  }
+
+  if (target && "document" in target) {
+    return target.document.uri;
+  }
+
+  return vscode.window.activeNotebookEditor?.notebook.uri
+    ?? vscode.window.activeTextEditor?.document.uri;
+};
+
+const activeViewColumn = () =>
+  vscode.window.activeNotebookEditor?.viewColumn
+  ?? vscode.window.activeTextEditor?.viewColumn;
+
+const reopenResource = async (uri: vscode.Uri, viewType: string) => {
+  await vscode.commands.executeCommand(
+    "vscode.openWith",
+    uri,
+    viewType,
+    activeViewColumn(),
+  );
+};
+
+const openAsDatabricksNotebook = async (
+  target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor,
+) => {
+  const uri = targetUriFromContext(target);
+
+  if (!uri) {
+    throw new Error("Open a Python file to switch into Databricks notebook view.");
+  }
+
+  const document = await vscode.workspace.openTextDocument(uri);
+  if (!isDatabricksNotebookSource(document.getText())) {
+    throw new Error(
+      `Only Python files starting with ${databricksHeaderExamples} can open as Databricks notebooks.`,
+    );
+  }
+
+  await reopenResource(uri, notebookType);
+};
+
+const toggleNotebookView = async (
+  target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor,
+) => {
+  const uri = targetUriFromContext(target);
+
+  if (!uri) {
+    throw new Error("Open a Python file or Databricks notebook to toggle the notebook view.");
+  }
+
+  const activeNotebook = vscode.window.activeNotebookEditor;
+  if (activeNotebook?.notebook.uri.toString() === uri.toString()) {
+    await reopenResource(uri, "default");
+    return;
+  }
+
+  await openAsDatabricksNotebook(target);
+};
+
 const createKernelEnvironments = async () => {
   const environments = [await createLocalKernelEnvironment()].filter(
     (environment): environment is KernelEnvironment => Boolean(environment),
@@ -254,6 +330,22 @@ const registerCommands = (
       "databricksNotebookRenderer.previewPythonSource",
       async (editor?: vscode.NotebookEditor) => {
         await openPythonSourcePreview(editor);
+      },
+    ),
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "databricksNotebookRenderer.toggleNotebookView",
+      async (target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor) => {
+        await toggleNotebookView(target);
+      },
+    ),
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "databricksNotebookRenderer.openAsNotebook",
+      async (target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor) => {
+        await openAsDatabricksNotebook(target);
       },
     ),
   );

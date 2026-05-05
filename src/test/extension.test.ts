@@ -42,6 +42,7 @@ const extensionBundle = require('../../out/extension/extension.js') as {
   DatabricksCliClient: new (...args: unknown[]) => {
     listClusters: () => Promise<Array<{ id: string; name: string; state?: string }>>;
   };
+  isDatabricksNotebookSource: (value: string) => boolean;
   parseCommandExecutionResult: (response: unknown) => string;
   previewSourceForNotebookData: (data: vscode.NotebookData) => string;
   KernelService: new (environment: {
@@ -104,6 +105,36 @@ suite('Extension Test Suite', () => {
 
     assert.strictEqual(notebook.cells[3].languageId, 'python');
     assert.strictEqual(notebook.cells[3].value, 'print("ready")');
+  });
+
+  test('recognizes Databricks source headers with or without a space after #', () => {
+    assert.strictEqual(
+      extensionBundle.isDatabricksNotebookSource('# Databricks notebook source\nprint("hi")'),
+      true,
+    );
+    assert.strictEqual(
+      extensionBundle.isDatabricksNotebookSource('#Databricks notebook source\nprint("hi")'),
+      true,
+    );
+    assert.strictEqual(
+      extensionBundle.isDatabricksNotebookSource('print("plain python")'),
+      false,
+    );
+  });
+
+  test('deserializes source files that use the compact Databricks header', () => {
+    const source = [
+      '#Databricks notebook source',
+      '',
+      '# COMMAND ----------',
+      'print("ready")',
+    ].join('\n');
+
+    const notebook = extensionBundle.deserializeDatabricksNotebook(new TextEncoder().encode(source));
+
+    assert.strictEqual(notebook.cells.length, 1);
+    assert.strictEqual(notebook.cells[0].languageId, 'python');
+    assert.strictEqual(notebook.cells[0].value, 'print("ready")');
   });
 
   test('serializes notebook cells back to Databricks source format', () => {

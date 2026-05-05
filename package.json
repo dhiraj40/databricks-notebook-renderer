@@ -22,7 +22,11 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": ["onNotebook:databricks-notebook-renderer"],
+  "activationEvents": [
+    "onNotebook:databricks-notebook-renderer",
+    "onCommand:databricksNotebookRenderer.toggleNotebookView",
+    "onCommand:databricksNotebookRenderer.openAsNotebook"
+  ],
   "main": "./out/extension/extension.js",
   "browser": "./out/extension/extension.web.js",
   "contributes": {
@@ -34,6 +38,14 @@
       {
         "command": "databricksNotebookRenderer.previewPythonSource",
         "title": "Databricks Notebook: Preview Python Source"
+      },
+      {
+        "command": "databricksNotebookRenderer.toggleNotebookView",
+        "title": "Databricks Notebook: Toggle Notebook View"
+      },
+      {
+        "command": "databricksNotebookRenderer.openAsNotebook",
+        "title": "Databricks Notebook: Open as Notebook"
       }
     ],
     "configuration": {
@@ -76,14 +88,34 @@
           {
             "filenamePattern": "*.py"
           }
-        ]
+        ],
+        "priority": "option"
       }
     ],
     "menus": {
       "notebook/toolbar": [
         {
+          "command": "databricksNotebookRenderer.toggleNotebookView",
+          "when": "notebookType == databricks-notebook-renderer",
+          "group": "navigation"
+        },
+        {
           "command": "databricksNotebookRenderer.previewPythonSource",
           "when": "notebookType == databricks-notebook-renderer",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "databricksNotebookRenderer.toggleNotebookView",
+          "when": "resourceExtname == .py",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "databricksNotebookRenderer.openAsNotebook",
+          "when": "resourceExtname == .py",
           "group": "navigation"
         }
       ]

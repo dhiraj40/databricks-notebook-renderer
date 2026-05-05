@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 const NOTEBOOK_HEADER = '# Databricks notebook source';
+const NOTEBOOK_HEADER_PATTERN = /^#\s*Databricks notebook source\s*$/;
 const COMMAND_DELIMITER = '# COMMAND ----------';
 const DBTITLE_PATTERN = /^# DBTITLE \d+,(.*)$/;
 const MAGIC_PREFIX = '# MAGIC ';
@@ -23,6 +24,11 @@ const normalizeNewlines = (value: string) => value.replace(/^\uFEFF/, '').replac
 const trimCellBlock = (value: string) => value.replace(/^\n+/, '').replace(/\n+$/, '');
 
 const splitLines = (value: string) => value === '' ? [] : value.split('\n');
+
+export const isDatabricksNotebookSource = (value: string) => {
+  const [firstLine = ''] = splitLines(normalizeNewlines(value));
+  return NOTEBOOK_HEADER_PATTERN.test(firstLine.trim());
+};
 
 const isMagicLine = (line: string) => line === EMPTY_MAGIC_LINE || line.startsWith(MAGIC_PREFIX);
 
@@ -247,7 +253,7 @@ const serializeCell = (cell: vscode.NotebookCellData) => {
 export const deserializeDatabricksNotebook = (content: Uint8Array): vscode.NotebookData => {
   const text = normalizeNewlines(new TextDecoder().decode(content));
   const lines = splitLines(text);
-  const withoutHeader = lines[0]?.trim() === NOTEBOOK_HEADER ? lines.slice(1).join('\n') : text;
+  const withoutHeader = isDatabricksNotebookSource(text) ? lines.slice(1).join('\n') : text;
 
   const cells = withoutHeader
     .split(/^# COMMAND ----------.*$/gm)

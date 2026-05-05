@@ -4,7 +4,7 @@ VS Code extension for opening Databricks source notebooks as notebook documents,
 
 ## Features
 
-- Opens Databricks `.py` source notebooks in notebook UI.
+- Opens Databricks `.py` source notebooks in notebook UI when you explicitly switch into notebook mode.
 - Parses and preserves Databricks notebook markers such as `# Databricks notebook source`, `# COMMAND ----------`, `# DBTITLE`, and `%md` / `%sql` / `%scala` / `%python` / `%r` / `%sh`.
 - Saves notebook edits back to Databricks source format.
 - Supports local execution for Python, SQL, shell, and Scala when those runtimes are available on your machine.
@@ -34,9 +34,15 @@ npm install
 1. Open this repo in VS Code.
 2. Press `F5` to launch the Extension Development Host.
 3. In the launched window, open `example/abcd.py`.
-4. Use `Reopen Editor With...` and choose `Databricks Notebook`.
+4. Use `Databricks Notebook: Toggle Notebook View` or `Databricks Notebook: Open as Notebook`.
 
 ## Using The Extension
+
+### Opening Databricks source notebooks
+
+1. Open a `.py` file that starts with `# Databricks notebook source` or `#Databricks notebook source`.
+2. Use `Databricks Notebook: Toggle Notebook View` from the editor title, or `Databricks Notebook: Open as Notebook` from the Explorer context menu.
+3. Once the file is open as a notebook, use the same toggle action in the notebook toolbar to switch back to plain text.
 
 ### Local execution
 
@@ -65,6 +71,8 @@ Use `Databricks Notebook: Preview Python Source` from the Command Palette or the
 
 - `Databricks Notebook: Refresh Clusters`
 - `Databricks Notebook: Preview Python Source`
+- `Databricks Notebook: Toggle Notebook View`
+- `Databricks Notebook: Open as Notebook`
 
 ## Settings
 
