@@ -27,6 +27,5 @@ print(f"Revenue pipeline executed for {run_date}")
 # MAGIC ## Hellow
 
 # COMMAND ----------
-print(a)
 
 # COMMAND ----------
