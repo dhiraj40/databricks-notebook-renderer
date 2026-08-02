@@ -83,6 +83,9 @@
         "selector": [
           {
             "filenamePattern": "*.dbnb"
+          },
+          {
+            "filenamePattern": "*.py"
           }
         ],
         "priority": "default"
