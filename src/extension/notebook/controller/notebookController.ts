@@ -42,7 +42,8 @@ export class NotebookController  implements vscode.Disposable {
 
         try {
             const code = cell.document.getText();
-            const result = await this.cellExecutionService.executeCell(code);
+            const notebookId = cell.notebook.uri.toString();
+            const result = await this.cellExecutionService.executeCell(code, notebookId, cell.document.languageId);
 
             if (result.success){
                 execution.replaceOutput([

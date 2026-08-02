@@ -19,12 +19,32 @@ import { ExecutionService } from "./databricks/services/executionService";
 import { CommandApi } from "./databricks/api/commandApi";
 import { SessionService } from "./databricks/services/sessionService";
 import { SessionApi } from "./databricks/api/sessionApi";
-import { SessionState } from "./databricks/state/sessionState";
 import { NotebookSerializer } from "./notebook/serializer/notebookSerializer";
-import { DatabricksTreeDataProvider } from "./ui/sidebar/databricksTreeDataProvider";
-import { DatabricksView } from "./ui/sidebar/databricksView";
+import { DatabricksTreeDataProvider } from "./ui/sidebar/databricks/databricksTreeDataProvider";
+import { DatabricksView } from "./ui/sidebar/databricks/databricksView";
 import { EventBus } from "./core/events/eventBus";
+import { ExtensionEvents } from "./core/events/extensionEvents";
 import { VSCodeWorkspaceStorage } from "./core/storage/workspaceStorage";
+import { DatabricksStatusBar } from "./ui/statusbar/databricksStatusBar";
+import { NotebookContextState } from "./notebook/state/notebookContextState";
+
+
+async function activateStatusBar(
+    authService: AuthService, computeService: ComputeService, statusBar: DatabricksStatusBar
+): Promise<void> {
+    if(await authService.isAuthenticated()){
+        statusBar.setConnected();
+    }else{
+        statusBar.setDisconnected();
+    }
+
+    const compute = computeService.getSelectedCompute();
+    if(compute){
+        statusBar.setCompute(compute.name);
+    }else{
+        statusBar.clearCompute();
+    }
+}
 
 
 export async function activate(
@@ -58,12 +78,6 @@ export async function activate(
         ExtensionIds.commands.connect, () => connectCommand.execute()
     );
 
-    // Register Command disconnect
-    const disconnectCommand = new DisconnectCommand(authService, eventBus );
-    commandRegistry.register(
-        ExtensionIds.commands.disconnect, () => disconnectCommand.execute()
-    );
-
     // vscode workspace registry
     const vsCodeWorkspaceStorage = new VSCodeWorkspaceStorage(context.workspaceState);
     serviceRegistry.register(ServiceKeys.workspaceStorage, vsCodeWorkspaceStorage);
@@ -82,23 +96,32 @@ export async function activate(
         await computeService.restoreSelectedCompute(connection);
     }
 
-
     // Session Service
     const sessionApi = new SessionApi();
-    const sessionState = new SessionState();
-    const sessionService = new SessionService(sessionApi, sessionState, eventBus);
+    const sessionService = new SessionService(sessionApi);
+
+    // Notebook Cell Execution Service
+    const notebookContextState = new NotebookContextState();
 
     // Tree Provider
-    const databricksTreeProvider = new DatabricksTreeDataProvider(authService, computeService, sessionService, eventBus);
+    const databricksTreeProvider = new DatabricksTreeDataProvider(authService, computeService, notebookContextState, eventBus);
     const databricksView = new DatabricksView(databricksTreeProvider);
     context.subscriptions.push(databricksView);
 
     // Execution Service
     const commandApi = new CommandApi();
-    const executionService = new ExecutionService(commandApi, sessionService);
+    const commandTimeoutSeconds = vscode.workspace
+        .getConfiguration("databricksNotebookRenderer")
+        .get<number>("databricksCommandTimeoutSeconds", 120);
+    const executionService = new ExecutionService(
+        commandApi,
+        commandTimeoutSeconds * 1_000
+    );
 
     // Register Notebook Controller
-    const cellExecutionService = new CellExecutionService(authService, computeService, executionService);
+    const cellExecutionService = new CellExecutionService(
+        authService, computeService, sessionService, executionService, notebookContextState, eventBus
+    );
     const notebookController = new NotebookController(cellExecutionService);
     context.subscriptions.push(notebookController);
 
@@ -117,6 +140,25 @@ export async function activate(
                 transientOutputs: true
             }
         )
+    );
+
+    // Register Status Bar
+    const statusBar = new DatabricksStatusBar();
+    context.subscriptions.push(statusBar);
+
+    await activateStatusBar(authService, computeService, statusBar);
+    eventBus.subscribe(ExtensionEvents.connectionChanged, () => {
+        void activateStatusBar(authService, computeService, statusBar);
+    });
+    eventBus.subscribe(ExtensionEvents.computeChanged, () => {
+        void activateStatusBar(authService, computeService, statusBar);
+    });
+
+
+    // Register Command disconnect
+    const disconnectCommand = new DisconnectCommand(authService, eventBus, sessionService, notebookContextState );
+    commandRegistry.register(
+        ExtensionIds.commands.disconnect, () => disconnectCommand.execute()
     );
 
     console.log("Extension Activated");

@@ -51,8 +51,14 @@ export class CommandApi {
         commandId: string
     ): Promise<CommandResult> {
 
+        const parameters = new URLSearchParams({
+            clusterId,
+            contextId,
+            commandId
+        });
+
         const response = await fetch(
-            `${connection.workspaceUrl}${DatabricksApiEndpoints.COMMAND_STATUS}`,
+            `${connection.workspaceUrl}${DatabricksApiEndpoints.COMMAND_STATUS}?${parameters.toString()}`,
             {
                 method: "GET",
                 headers: {
