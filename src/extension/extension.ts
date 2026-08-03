@@ -1,413 +1,181 @@
 import * as vscode from "vscode";
-import {
-  DatabricksCliClient,
-  parseCommandExecutionResult,
-  parseDatabricksClusters,
-} from "./kernel/DatabricksCli";
-import { createDatabricksClusterEnvironment } from "./kernel/DatabricksClusterEnvironment";
-import { createLocalKernelEnvironment } from "./kernel/LocalKernelEnvironment";
-import { KernelService } from "./kernel/KernelService";
-import { PythonProcess } from "./kernel/PythonProcess";
-import {
-  displayKernelLanguage,
-  KernelEnvironment,
-  normalizeKernelLanguage,
-} from "./kernel/KernelEnvironment";
-import {
-  databricksNotebookSerializer,
-  deserializeDatabricksNotebook,
-  isDatabricksNotebookSource,
-  previewSourceForNotebookData,
-  serializeDatabricksNotebook,
-} from "./notebookSerializer";
+import { ServiceRegistry } from "./core/registry/serviceRegistry";
+import { VSCodeSecretStorage } from "./core/storage/secretStorage";
+import { AuthService } from "./databricks/auth/authService";
+import { CommandRegistry } from "./core/registry/commandRegistry";
+import { ExtensionIds } from "./core/configuration/extensionIds";
+import { ConnectCommand } from "./features/connection/connectCommand";
+import { DisconnectCommand } from "./features/connection/disconnectCommand";
+import { SecretKeys } from "./core/configuration/secretKeys";
+import { ServiceKeys } from "./core/registry/serviceKeys";
+import { AuthApi } from "./databricks/api/authApi";
+import { SelectComputeCommand } from "./features/compute-selector/selectComputeCommand";
+import { ComputeState } from "./databricks/state/computeState";
+import { ComputeApi } from "./databricks/api/computeApi";
+import { ComputeService } from "./databricks/services/computeService";
+import { DATABRICKS_NOTEBOOK_TYPE, NotebookController } from "./notebook/controller/notebookController";
+import { CellExecutionService } from "./notebook/execution/cellExecutionService";
+import { ExecutionService } from "./databricks/services/executionService";
+import { CommandApi } from "./databricks/api/commandApi";
+import { SessionService } from "./databricks/services/sessionService";
+import { SessionApi } from "./databricks/api/sessionApi";
+import { NotebookSerializer } from "./notebook/serializer/notebookSerializer";
+import { DatabricksTreeDataProvider } from "./ui/sidebar/databricks/databricksTreeDataProvider";
+import { DatabricksView } from "./ui/sidebar/databricks/databricksView";
+import { EventBus } from "./core/events/eventBus";
+import { ExtensionEvents } from "./core/events/extensionEvents";
+import { VSCodeWorkspaceStorage } from "./core/storage/workspaceStorage";
+import { DatabricksStatusBar } from "./ui/statusbar/databricksStatusBar";
+import { NotebookContextState } from "./notebook/state/notebookContextState";
+import { DatabricksPyNotebookSerializer } from "./notebook/serializer/databricksPyNotebookSerializer";
 
-export {
-  createLocalKernelEnvironment,
-  controllerLabelForLanguage,
-  databricksNotebookSerializer,
-  DatabricksCliClient,
-  deserializeDatabricksNotebook,
-  isDatabricksNotebookSource,
-  KernelService,
-  createDatabricksClusterEnvironment,
-  previewSourceForNotebookData,
-  parseCommandExecutionResult,
-  parseDatabricksClusters,
-  serializeDatabricksNotebook,
-  PythonProcess,
-};
 
-const notebookType = "databricks-notebook-renderer";
-
-const databricksHeaderExamples = [
-  "# Databricks notebook source",
-  "#Databricks notebook source",
-].join(" or ");
-
-const controllerLabelForLanguage = (
-  environment: KernelEnvironment,
-  languageId?: string,
-) => {
-  const language = languageId ? normalizeKernelLanguage(languageId) : undefined;
-
-  if (!language || !environment.supportedLanguages.includes(language)) {
-    const fallbackLanguage = environment.supportedLanguages[0];
-    const fallbackLabel = fallbackLanguage
-      ? `${displayKernelLanguage(fallbackLanguage).replace(/^./, (value) =>
-          value.toUpperCase(),
-        )} Kernel`
-      : environment.label;
-
-    return {
-      label: environment.label === "Local Auto"
-        ? fallbackLabel
-        : `${fallbackLabel} (${environment.label})`,
-      description: environment.description ?? "Available kernel environment",
-    };
-  }
-
-  return {
-    label: `${
-      displayKernelLanguage(language).replace(/^./, (value) =>
-        value.toUpperCase(),
-      )
-    } Kernel${environment.label === "Local Auto" ? "" : ` (${environment.label})`}`,
-    description: environment.description ?? "Available kernel environment",
-  };
-};
-
-type RegisteredController = {
-  controller: vscode.NotebookController;
-  dispose(): void;
-};
-
-const createRegisteredController = (
-  context: vscode.ExtensionContext,
-  environment: KernelEnvironment,
-) => {
-  const kernelService = new KernelService(environment);
-  const controller = vscode.notebooks.createNotebookController(
-    environment.id,
-    notebookType,
-    environment.label,
-  );
-
-  updateControllerPresentation(controller, environment, vscode.window.activeNotebookEditor);
-  controller.supportedLanguages = [...environment.supportedLanguages];
-  controller.executeHandler = async (cells) => {
-    for (const cell of cells) {
-      const execution = controller.createNotebookCellExecution(cell);
-      execution.start(Date.now());
-      await execution.clearOutput();
-
-      try {
-        const result = await kernelService.run(
-          cell.document.languageId,
-          cell.document.getText(),
-          { notebookUri: cell.notebook.uri },
-        );
-        await execution.replaceOutput([
-          new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.text(result),
-          ]),
-        ]);
-        execution.end(true, Date.now());
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await execution.replaceOutput([
-          new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.stderr(message),
-          ]),
-        ]);
-        execution.end(false, Date.now());
-      }
-    }
-  };
-
-  for (const document of vscode.workspace.notebookDocuments) {
-    autoPreferController(controller, document);
-  }
-
-  const subscriptions = [
-    vscode.workspace.onDidOpenNotebookDocument((document) =>
-      autoPreferController(controller, document),
-    ),
-    vscode.window.onDidChangeActiveNotebookEditor((editor) =>
-      updateControllerPresentation(controller, environment, editor),
-    ),
-    vscode.window.onDidChangeNotebookEditorSelection((event) =>
-      updateControllerPresentation(controller, environment, event.notebookEditor),
-    ),
-  ];
-
-  context.subscriptions.push(controller);
-  context.subscriptions.push({ dispose: () => kernelService.dispose() });
-  context.subscriptions.push(...subscriptions);
-
-  return {
-    controller,
-    dispose: () => {
-      for (const subscription of subscriptions) {
-        subscription.dispose();
-      }
-
-      kernelService.dispose();
-      controller.dispose();
-    },
-  } satisfies RegisteredController;
-};
-
-class KernelControllerRegistry {
-  private registered: RegisteredController[] = [];
-
-  replace(controllers: RegisteredController[]) {
-    for (const registeredController of this.registered) {
-      registeredController.dispose();
+async function activateStatusBar(
+    authService: AuthService, computeService: ComputeService, statusBar: DatabricksStatusBar
+): Promise<void> {
+    if(await authService.isAuthenticated()){
+        statusBar.setConnected();
+    }else{
+        statusBar.setDisconnected();
     }
 
-    this.registered = controllers;
-  }
-
-  dispose() {
-    this.replace([]);
-  }
+    const compute = computeService.getSelectedCompute();
+    if(compute){
+        statusBar.setCompute(compute.name);
+    }else{
+        statusBar.clearCompute();
+    }
 }
 
-const notebookDataFromDocument = (document: vscode.NotebookDocument) => {
-  return new vscode.NotebookData(
-    document.getCells().map((cell) => {
-      const notebookCell = new vscode.NotebookCellData(
-        cell.kind,
-        cell.document.getText(),
-        cell.document.languageId,
-      );
-      notebookCell.metadata = cell.metadata;
-      return notebookCell;
-    }),
-  );
-};
 
-const openPythonSourcePreview = async (editor?: vscode.NotebookEditor) => {
-  const activeEditor = editor ?? vscode.window.activeNotebookEditor;
+export async function activate(
+    context: vscode.ExtensionContext
+): Promise<void> {
+    // Service Registry
+    const serviceRegistry = new ServiceRegistry();
 
-  if (!activeEditor || activeEditor.notebook.notebookType !== notebookType) {
-    throw new Error("Open a Databricks notebook to preview its Python source.");
-  }
+    // Register Event Bus
+    const eventBus = new EventBus();
+    serviceRegistry.register(ServiceKeys.eventBus, eventBus);
+    
+    // Register secrete storage service
+    const secretStorage = new VSCodeSecretStorage(context.secrets);
+    serviceRegistry.register(ServiceKeys.secretStorage, secretStorage);
 
-  const source = previewSourceForNotebookData(
-    notebookDataFromDocument(activeEditor.notebook),
-  );
-  const preview = await vscode.workspace.openTextDocument({
-    content: source,
-    language: "python",
-  });
+    // Register auth api
+    const authApi = new AuthApi();
+    serviceRegistry.register(ServiceKeys.authApi, authApi);
 
-  await vscode.window.showTextDocument(preview, {
-    preview: true,
-    viewColumn: vscode.ViewColumn.Beside,
-    preserveFocus: false,
-  });
-};
+    // Register auth service
+    const authService = new AuthService(authApi, secretStorage);
+    serviceRegistry.register(ServiceKeys.authService, authService);
 
-const targetUriFromContext = (
-  target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor,
-) => {
-  if (target instanceof vscode.Uri) {
-    return target;
-  }
+    // Command Registry
+    const commandRegistry = new CommandRegistry(context);
 
-  if (target && "notebook" in target) {
-    return target.notebook.uri;
-  }
-
-  if (target && "document" in target) {
-    return target.document.uri;
-  }
-
-  return vscode.window.activeNotebookEditor?.notebook.uri
-    ?? vscode.window.activeTextEditor?.document.uri;
-};
-
-const activeViewColumn = () =>
-  vscode.window.activeNotebookEditor?.viewColumn
-  ?? vscode.window.activeTextEditor?.viewColumn;
-
-const reopenResource = async (uri: vscode.Uri, viewType: string) => {
-  await vscode.commands.executeCommand(
-    "vscode.openWith",
-    uri,
-    viewType,
-    activeViewColumn(),
-  );
-};
-
-const openAsDatabricksNotebook = async (
-  target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor,
-) => {
-  const uri = targetUriFromContext(target);
-
-  if (!uri) {
-    throw new Error("Open a Python file to switch into Databricks notebook view.");
-  }
-
-  const document = await vscode.workspace.openTextDocument(uri);
-  if (!isDatabricksNotebookSource(document.getText())) {
-    throw new Error(
-      `Only Python files starting with ${databricksHeaderExamples} can open as Databricks notebooks.`,
+    // Register Command connect
+    const connectCommand = new ConnectCommand(authApi, authService, eventBus);
+    commandRegistry.register(
+        ExtensionIds.commands.connect, () => connectCommand.execute()
     );
-  }
 
-  await reopenResource(uri, notebookType);
-};
+    // vscode workspace registry
+    const vsCodeWorkspaceStorage = new VSCodeWorkspaceStorage(context.workspaceState);
+    serviceRegistry.register(ServiceKeys.workspaceStorage, vsCodeWorkspaceStorage);
 
-const toggleNotebookView = async (
-  target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor,
-) => {
-  const uri = targetUriFromContext(target);
+    // Register Selected Compute Service
+    const computeState = new ComputeState();
+    const computeApi = new ComputeApi();
 
-  if (!uri) {
-    throw new Error("Open a Python file or Databricks notebook to toggle the notebook view.");
-  }
+    const computeService = new ComputeService(computeApi, computeState, vsCodeWorkspaceStorage);
+    const selectedComputeCommand = new SelectComputeCommand(authService, computeService, eventBus);
+    commandRegistry.register(ExtensionIds.commands.selectCompute, () => selectedComputeCommand.execute());
 
-  const activeNotebook = vscode.window.activeNotebookEditor;
-  if (activeNotebook?.notebook.uri.toString() === uri.toString()) {
-    await reopenResource(uri, "default");
-    return;
-  }
+    // Restore selected compute
+    const connection = await authService.getConnection();
+    if(connection){
+        await computeService.restoreSelectedCompute(connection);
+    }
 
-  await openAsDatabricksNotebook(target);
-};
+    // Session Service
+    const sessionApi = new SessionApi();
+    const sessionService = new SessionService(sessionApi);
 
-const createKernelEnvironments = async () => {
-  const environments = [await createLocalKernelEnvironment()].filter(
-    (environment): environment is KernelEnvironment => Boolean(environment),
-  );
-  const databricksClient = new DatabricksCliClient();
+    // Notebook Cell Execution Service
+    const notebookContextState = new NotebookContextState();
 
-  try {
-    const clusters = await databricksClient.listClusters();
-    environments.push(
-      ...clusters.map((cluster) => createDatabricksClusterEnvironment(cluster)),
+    // Tree Provider
+    const databricksTreeProvider = new DatabricksTreeDataProvider(authService, computeService, notebookContextState, eventBus);
+    const databricksView = new DatabricksView(databricksTreeProvider);
+    context.subscriptions.push(databricksView);
+
+    // Execution Service
+    const commandApi = new CommandApi();
+    const commandTimeoutSeconds = vscode.workspace
+        .getConfiguration("databricksNotebookRenderer")
+        .get<number>("databricksCommandTimeoutSeconds", 120);
+    const executionService = new ExecutionService(
+        commandApi,
+        commandTimeoutSeconds * 1_000
     );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`Databricks cluster discovery skipped: ${message}`);
-  }
 
-  return environments;
-};
-
-const registerKernelControllers = async (
-  context: vscode.ExtensionContext,
-  registry: KernelControllerRegistry,
-) => {
-  const environments = await createKernelEnvironments();
-  registry.replace(
-    environments.map((environment) =>
-      createRegisteredController(context, environment),
-    ),
-  );
-};
-
-const registerCommands = (
-  context: vscode.ExtensionContext,
-  registry: KernelControllerRegistry,
-) => {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "databricksNotebookRenderer.refreshClusters",
-      async () => {
-        await registerKernelControllers(context, registry);
-        void vscode.window.setStatusBarMessage(
-          "Databricks notebook kernels refreshed.",
-          3000,
-        );
-      },
-    ),
-  );
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "databricksNotebookRenderer.previewPythonSource",
-      async (editor?: vscode.NotebookEditor) => {
-        await openPythonSourcePreview(editor);
-      },
-    ),
-  );
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "databricksNotebookRenderer.toggleNotebookView",
-      async (target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor) => {
-        await toggleNotebookView(target);
-      },
-    ),
-  );
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "databricksNotebookRenderer.openAsNotebook",
-      async (target?: vscode.Uri | vscode.TextEditor | vscode.NotebookEditor) => {
-        await openAsDatabricksNotebook(target);
-      },
-    ),
-  );
-};
-const getFocusedCellLanguage = (
-  editor: vscode.NotebookEditor | undefined,
-): string | undefined => {
-  if (!editor || editor.notebook.notebookType !== notebookType) {
-    return undefined;
-  }
-
-  const focusedRange = editor.selections[0] ?? editor.selection;
-  const focusedCellIndex = focusedRange?.start ?? 0;
-
-  if (
-    focusedCellIndex < 0 ||
-    focusedCellIndex >= editor.notebook.cellCount
-  ) {
-    return undefined;
-  }
-
-  return editor.notebook.cellAt(focusedCellIndex).document.languageId;
-};
-
-const updateControllerPresentation = (
-  controller: vscode.NotebookController,
-  environment: KernelEnvironment,
-  editor: vscode.NotebookEditor | undefined,
-) => {
-  const presentation = controllerLabelForLanguage(
-    environment,
-    getFocusedCellLanguage(editor),
-  );
-  controller.label = presentation.label;
-  controller.description = presentation.description;
-};
-
-const autoPreferController = (
-  controller: vscode.NotebookController,
-  document: vscode.NotebookDocument,
-) => {
-  if (document.notebookType === notebookType) {
-    controller.updateNotebookAffinity(
-      document,
-      vscode.NotebookControllerAffinity.Preferred,
+    // Register Notebook Controller
+    const cellExecutionService = new CellExecutionService(
+        authService, computeService, sessionService, executionService, notebookContextState, eventBus
     );
-  }
-};
+    const notebookPyController = new NotebookController(
+        cellExecutionService, DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_PYTHON_NOTEBOOK
+    );
+    const notebookController = new NotebookController(
+        cellExecutionService, DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_NOTEBOOK_RENDERER
+    );
+    context.subscriptions.push(notebookPyController);
+    context.subscriptions.push(notebookController);
 
-export async function activate(context: vscode.ExtensionContext) {
-  const registry = new KernelControllerRegistry();
-  context.subscriptions.push({ dispose: () => registry.dispose() });
-  registerCommands(context, registry);
-  await registerKernelControllers(context, registry);
+    console.log(
+        "NotebookController registered"
+    );
 
-  context.subscriptions.push(
-    vscode.workspace.registerNotebookSerializer(
-      notebookType,
-      databricksNotebookSerializer,
-      { transientOutputs: false },
-    ),
-  );
+    // Notebook Serializer
+    const notebookSerializer = new NotebookSerializer();
+    const notebookPySerializer = new DatabricksPyNotebookSerializer();
+    const jupyterNotebookController = new NotebookController(
+        cellExecutionService, DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_JUPYTER_NOTEBOOK
+    );
+    context.subscriptions.push(jupyterNotebookController);
+
+    context.subscriptions.push(vscode.workspace.registerNotebookSerializer(
+        DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_NOTEBOOK_RENDERER.type, notebookSerializer,
+        {transientOutputs: true}
+    ));
+
+    context.subscriptions.push(vscode.workspace.registerNotebookSerializer(
+        DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_PYTHON_NOTEBOOK.type, notebookPySerializer,
+        {transientOutputs: true}
+    ));
+    
+    // Register Status Bar
+    const statusBar = new DatabricksStatusBar();
+    context.subscriptions.push(statusBar);
+
+    await activateStatusBar(authService, computeService, statusBar);
+    eventBus.subscribe(ExtensionEvents.connectionChanged, () => {
+        void activateStatusBar(authService, computeService, statusBar);
+    });
+    eventBus.subscribe(ExtensionEvents.computeChanged, () => {
+        void activateStatusBar(authService, computeService, statusBar);
+    });
+
+
+    // Register Command disconnect
+    const disconnectCommand = new DisconnectCommand(authService, eventBus, sessionService, notebookContextState );
+    commandRegistry.register(
+        ExtensionIds.commands.disconnect, () => disconnectCommand.execute()
+    );
+
+    console.log("Extension Activated");
 }
 
-export function deactivate() {}
+export function deactivate(): void {
+    console.log("Extension Deactivated");
+}

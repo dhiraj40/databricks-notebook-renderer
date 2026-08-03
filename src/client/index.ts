@@ -18,13 +18,14 @@ __webpack_public_path__ = new URL(scriptUrl.replace(/[^/]+$/, '') + __webpack_re
 export const activate: ActivationFunction = context => {
   return {
     renderOutputItem(outputItem, element) {
-      let root = element.querySelector<HTMLElement>('#root');
-      if (!root) {
-        root = document.createElement('div');
+      let shadow = element.shadowRoot;
+      if (!shadow) {
+        shadow = element.attachShadow({ mode: 'open' });
+        const root = document.createElement('div');
         root.id = 'root';
-        element.append(root);
+        shadow.append(root);
       }
-
+      const root = shadow.querySelector<HTMLElement>('#root')!;
       errorOverlay.wrap(root, () => {
         root.innerHTML = '';
         const node = document.createElement('div');

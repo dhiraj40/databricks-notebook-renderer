@@ -1,171 +1,168 @@
-# Databricks Notebook Renderer
+# Databricks Notebook Renderer — Release 2.0
 
-VS Code extension for opening Databricks source notebooks as notebook documents, running them locally or on Databricks clusters, and previewing Databricks-style rich outputs.
+Release 2.0 brings a more complete Databricks notebook experience directly inside Visual Studio Code. You can connect to Databricks, select compute, open supported notebook files, execute cells on a Databricks cluster, and view execution output without leaving VS Code.
 
-## Features
+## What’s New
 
-- Opens Databricks `.py` source notebooks in notebook UI when you explicitly switch into notebook mode.
-- Parses and preserves Databricks notebook markers such as `# Databricks notebook source`, `# COMMAND ----------`, `# DBTITLE`, and `%md` / `%sql` / `%scala` / `%python` / `%r` / `%sh`.
-- Saves notebook edits back to Databricks source format.
-- Supports local execution for Python, SQL, shell, and Scala when those runtimes are available on your machine.
-- Discovers Databricks clusters through the Databricks CLI and exposes them in the notebook kernel picker.
-- Runs cells remotely on the selected Databricks cluster through Databricks command execution APIs.
-- Expands notebook-relative Python `%run` files for local execution.
-- Leaves `%run` unchanged for remote Databricks execution.
-- Adds a side-by-side Python source preview so you can inspect the generated Databricks source before saving.
-- Renders `x-application/custom-json-output` with a richer Databricks-style panel for summaries, metrics, logs, and tables.
+### Databricks Connection
 
-## Setup
+You can now connect your VS Code workspace to Databricks using your workspace URL and access token.
 
-### Prerequisites
+Once connected, the extension validates your credentials and stores them securely using VS Code Secret Storage.
 
-- Node.js and npm
-- VS Code
-- Optional for remote execution: Databricks CLI installed and authenticated
+### Compute Selection
 
-### Install dependencies
+You can select a Databricks compute target from VS Code.
 
-```powershell
-npm install
+The selected compute is remembered for the workspace, so you do not need to select it again every time you restart VS Code.
+
+### Notebook Cell Execution
+
+Notebook cells can now be executed directly on Databricks compute.
+
+Supported languages:
+
+- Python
+- SQL
+- Scala
+- R
+
+The extension creates and reuses a Databricks execution session for each notebook and language combination.
+
+### Databricks Source Notebook Support
+
+Release 2.0 adds support for Databricks source-style Python notebooks.
+
+Supported file types:
+
+- `.dbnb`
+- `.py`
+
+Databricks source notebooks using markers such as the following can now be opened as notebooks:
+
+```python
+# Databricks notebook source
+# COMMAND ----------
+# MAGIC %md
 ```
 
-### Run the extension locally
+### Markdown and Magic Cell Support
 
-1. Open this repo in VS Code.
-2. Press `F5` to launch the Extension Development Host.
-3. In the launched window, open `example/abcd.py`.
-4. Use `Databricks Notebook: Toggle Notebook View` or `Databricks Notebook: Open as Notebook`.
+The extension can detect Databricks magic commands in source notebooks, including markdown cells.
 
-## Using The Extension
+Examples:
 
-### Opening Databricks source notebooks
-
-1. Open a `.py` file that starts with `# Databricks notebook source` or `#Databricks notebook source`.
-2. Use `Databricks Notebook: Toggle Notebook View` from the editor title, or `Databricks Notebook: Open as Notebook` from the Explorer context menu.
-3. Once the file is open as a notebook, use the same toggle action in the notebook toolbar to switch back to plain text.
-
-### Local execution
-
-1. Open a Databricks notebook.
-2. In the kernel picker, choose `Local Auto`.
-3. Run Python, SQL, shell, or Scala cells against runtimes available on your machine.
-
-### Remote execution on Databricks clusters
-
-1. Install and configure the Databricks CLI.
-2. Verify cluster discovery works:
-
-```powershell
-databricks clusters list --output json
+```python
+# MAGIC %md
+# MAGIC ## My Markdown Cell
 ```
 
-3. Open the notebook in VS Code.
-4. Choose a Databricks cluster from the notebook kernel picker.
-5. Run `Databricks Notebook: Refresh Clusters` if the cluster list needs to be refreshed.
-
-### Preview generated Python source
-
-Use `Databricks Notebook: Preview Python Source` from the Command Palette or the notebook toolbar to open a side-by-side preview of the current notebook serialized back into Databricks Python source.
-
-## Commands
-
-- `Databricks Notebook: Refresh Clusters`
-- `Databricks Notebook: Preview Python Source`
-- `Databricks Notebook: Toggle Notebook View`
-- `Databricks Notebook: Open as Notebook`
-
-## Settings
-
-- `databricksNotebookRenderer.databricksCliPath`: path to the Databricks CLI executable. Default: `databricks`
-- `databricksNotebookRenderer.databricksProfile`: optional Databricks CLI profile for cluster discovery and execution
-- `databricksNotebookRenderer.databricksCommandTimeoutSeconds`: max wait time for remote Databricks execution. Default: `120`
-
-## Remote Execution Notes
-
-- Remote execution currently targets Databricks classic clusters discovered from the Databricks CLI.
-- Python, SQL, and Scala run directly in Databricks command contexts.
-- Shell cells run through a Python command context that invokes `bash -lc` on the cluster driver.
-- Notebook serverless compute is not discovered by `databricks clusters list`, so it is not part of this extension's cluster picker flow.
-
-## Custom Output Payload
-
-The rich output renderer works best with JSON shaped like this:
-
-```json
-{
-  "title": "Revenue by region",
-  "subtitle": "warehouse: analytics-prod",
-  "status": "success",
-  "summary": "Query finished successfully and returned a preview of the result set.",
-  "metrics": [
-    { "label": "Rows", "value": 5 },
-    { "label": "Runtime", "value": "842 ms" }
-  ],
-  "logs": [
-    "Attached to SQL warehouse analytics-prod",
-    "Result limited to 5 rows for preview"
-  ],
-  "table": {
-    "columns": ["region", "orders", "revenue"],
-    "rows": [
-      ["North America", 1240, "$2.4M"],
-      ["EMEA", 980, "$1.9M"]
-    ]
-  }
-}
+```python
+# MAGIC %sql
+# MAGIC SELECT * FROM table_name
 ```
 
-The renderer also falls back gracefully for plain strings, arrays of objects, simple key/value objects, and raw JSON.
+### Rich Output Improvements
 
-## Development
+Notebook output rendering has been improved.
 
-```powershell
-npm run compile
-npm run lint
-npm test
+Supported output types include:
+
+- Text output
+- Error output
+- HTML output
+- Table output
+
+Databricks table results are rendered as tables in VS Code notebook output.
+
+### Databricks Sidebar
+
+A new Databricks sidebar view helps you see the current extension state.
+
+The sidebar shows:
+
+- Connection status
+- Selected compute
+- Active notebook sessions
+- Notebook language sessions
+
+## How to Use
+
+### 1. Connect to Databricks
+
+Run the command:
+
+```text
+Databricks Notebook Renderer: Connect
 ```
 
-## CI/CD Publish
+Enter your Databricks workspace URL and access token when prompted.
 
-This repo includes a GitHub Actions workflow at `.github/workflows/extension-ci-publish.yml`.
+### 2. Select Compute
 
-### What it does
+Run the command:
 
-- Runs install and tests on pull requests and pushes to `main` and `release`
-- Builds a `.vsix` package artifact
-- Publishes to the Visual Studio Marketplace when code is pushed to `release` and the publish environment is approved
-
-### Required GitHub secret
-
-- `VSCE_PAT`: Visual Studio Marketplace Personal Access Token for your publisher
-
-### Required GitHub environment
-
-- Create a GitHub Environment named `marketplace-publish`
-- Add required reviewers to that environment
-- Keep `VSCE_PAT` available to the workflow as a repository secret
-- The publish job will wait for approval before it runs
-
-### Publish flow
-
-1. Update the version in `package.json`
-2. Merge the approved PR into `release`
-3. GitHub Actions runs CI and pauses at the `marketplace-publish` environment approval
-4. Approve the environment deployment
-5. The workflow publishes the extension
-
-```powershell
-git checkout release
-git merge <your-pr-branch>
-git push origin release
+```text
+Databricks Notebook Renderer: Select Compute
 ```
 
-The workflow will package the extension and publish it from CI after approval.
+Choose the cluster where notebook cells should run.
 
-## Project Structure
+### 3. Open a Notebook
 
-- `src/extension/extension.ts`: extension activation, kernel registration, and commands
-- `src/extension/notebookSerializer.ts`: Databricks source notebook parsing, serialization, and source preview generation
-- `src/extension/kernel/`: local and Databricks execution environments
-- `src/client/render.ts`: output renderer webview logic
-- `src/client/style.css`: renderer styling
+Open a supported notebook file:
+
+```text
+.dbnb
+.py
+```
+
+For Databricks source Python notebooks, choose the Databricks notebook editor when VS Code asks how to open the file.
+
+### 4. Run Cells
+
+Use the notebook cell run button or VS Code notebook shortcuts to execute cells.
+
+Cells are executed on the selected Databricks compute.
+
+### 5. Disconnect
+
+Run the command:
+
+```text
+Databricks Notebook Renderer: Disconnect
+```
+
+This clears the active connection and session state.
+
+## Notes and Limitations
+
+### `.ipynb` Files
+
+Standard `.ipynb` files are still handled by the normal VS Code/Jupyter notebook experience.
+
+The extension does not replace the default Jupyter serializer for `.ipynb` files.
+
+### `%run` Support
+
+The `%run` magic command is not fully supported yet from local VS Code execution because relative notebook paths require a Databricks workspace notebook path.
+
+### Serverless Compute
+
+This release focuses on Databricks cluster-backed execution. Serverless notebook compute is not exposed yet.
+
+### Local Folder Mounting
+
+Local folders are not mounted directly into Databricks runtime. Code and files need to be available to Databricks through supported workspace, DBFS, or volume-based workflows.
+
+## Summary
+
+Release 2.0 turns the extension into a usable Databricks notebook workflow inside VS Code:
+
+- Connect to Databricks
+- Select compute
+- Open Databricks notebooks
+- Execute notebook cells remotely
+- View text, error, HTML, and table output
+- Track connection, compute, and sessions from the sidebar
+
