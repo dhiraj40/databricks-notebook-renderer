@@ -1,15 +1,45 @@
-import * as assert from 'assert';
+import * as assert from "assert";
+import * as vscode from "vscode";
 
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
-import * as vscode from 'vscode';
-// import * as myExtension from '../extension';
+const extensionId = "dhiraj-k.databricks-notebook-renderer";
+const commandIds = [
+    "databricksNotebookRenderer.connect",
+    "databricksNotebookRenderer.disconnect",
+    "databricksNotebookRenderer.selectCompute"
+];
 
-suite('Extension Test Suite', () => {
-  vscode.window.showInformationMessage('Start all tests.');
+suite("Databricks Notebook Renderer", () => {
+    let extension: vscode.Extension<unknown>;
 
-  test('Sample test', () => {
-    assert.strictEqual(-1, [1, 2, 3].indexOf(5));
-    assert.strictEqual(-1, [1, 2, 3].indexOf(0));
-  });
+    suiteSetup(async () => {
+        extension = vscode.extensions.getExtension(extensionId)!;
+        assert.ok(extension, `Extension '${extensionId}' should be available`);
+
+        await extension.activate();
+    });
+
+    test("activates successfully", () => {
+        assert.strictEqual(extension.isActive, true);
+    });
+
+    test("registers its connection and compute commands", async () => {
+        const registeredCommands = await vscode.commands.getCommands(true);
+
+        for (const commandId of commandIds) {
+            assert.ok(
+                registeredCommands.includes(commandId),
+                `Expected command '${commandId}' to be registered`
+            );
+        }
+    });
+
+    test("declares Databricks notebook types", () => {
+        const notebooks = extension.packageJSON.contributes.notebooks as Array<{
+            type: string;
+        }>;
+        const notebookTypes = notebooks.map((notebook) => notebook.type);
+
+        assert.ok(notebookTypes.includes("databricks-notebook-renderer"));
+        assert.ok(notebookTypes.includes("databricks-python-renderer"));
+    });
 });
