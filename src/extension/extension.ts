@@ -13,7 +13,7 @@ import { SelectComputeCommand } from "./features/compute-selector/selectComputeC
 import { ComputeState } from "./databricks/state/computeState";
 import { ComputeApi } from "./databricks/api/computeApi";
 import { ComputeService } from "./databricks/services/computeService";
-import { NotebookController } from "./notebook/controller/notebookController";
+import { DATABRICKS_NOTEBOOK_TYPE, NotebookController } from "./notebook/controller/notebookController";
 import { CellExecutionService } from "./notebook/execution/cellExecutionService";
 import { ExecutionService } from "./databricks/services/executionService";
 import { CommandApi } from "./databricks/api/commandApi";
@@ -27,6 +27,7 @@ import { ExtensionEvents } from "./core/events/extensionEvents";
 import { VSCodeWorkspaceStorage } from "./core/storage/workspaceStorage";
 import { DatabricksStatusBar } from "./ui/statusbar/databricksStatusBar";
 import { NotebookContextState } from "./notebook/state/notebookContextState";
+import { DatabricksPyNotebookSerializer } from "./notebook/serializer/databricksPyNotebookSerializer";
 
 
 async function activateStatusBar(
@@ -122,7 +123,13 @@ export async function activate(
     const cellExecutionService = new CellExecutionService(
         authService, computeService, sessionService, executionService, notebookContextState, eventBus
     );
-    const notebookController = new NotebookController(cellExecutionService);
+    const notebookPyController = new NotebookController(
+        cellExecutionService, DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_PYTHON_NOTEBOOK
+    );
+    const notebookController = new NotebookController(
+        cellExecutionService, DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_NOTEBOOK_RENDERER
+    );
+    context.subscriptions.push(notebookPyController);
     context.subscriptions.push(notebookController);
 
     console.log(
@@ -131,17 +138,22 @@ export async function activate(
 
     // Notebook Serializer
     const notebookSerializer = new NotebookSerializer();
-
-    context.subscriptions.push(
-        vscode.workspace.registerNotebookSerializer(
-            "databricks-notebook-renderer",
-            notebookSerializer,
-            {
-                transientOutputs: true
-            }
-        )
+    const notebookPySerializer = new DatabricksPyNotebookSerializer();
+    const jupyterNotebookController = new NotebookController(
+        cellExecutionService, DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_JUPYTER_NOTEBOOK
     );
+    context.subscriptions.push(jupyterNotebookController);
 
+    context.subscriptions.push(vscode.workspace.registerNotebookSerializer(
+        DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_NOTEBOOK_RENDERER.type, notebookSerializer,
+        {transientOutputs: true}
+    ));
+
+    context.subscriptions.push(vscode.workspace.registerNotebookSerializer(
+        DATABRICKS_NOTEBOOK_TYPE.DATABRICKS_PYTHON_NOTEBOOK.type, notebookPySerializer,
+        {transientOutputs: true}
+    ));
+    
     // Register Status Bar
     const statusBar = new DatabricksStatusBar();
     context.subscriptions.push(statusBar);

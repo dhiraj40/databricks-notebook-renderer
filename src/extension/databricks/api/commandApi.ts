@@ -76,10 +76,12 @@ export class CommandApi {
 
         const data = await response.json() as any;
 
+        // console.log(`src.databricks.api.commandApi.getCommandStatus: `, JSON.stringify(data, null, 2));
+
         return {
             status: data.status,
             resultType: data.results?.resultType,
-            data: data.results?.data,
+            data: data.results,
             error: data.results?.cause
         };
     }

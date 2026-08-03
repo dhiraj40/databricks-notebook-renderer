@@ -1,14 +1,15 @@
 import * as vscode from "vscode";
 
-export class ErrorOutput {
+export class HtmlOutput {
 
     public static create(
-        error: string
+        html: string
     ): vscode.NotebookCellOutput {
 
         return new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.error(
-                new Error(error)
+            vscode.NotebookCellOutputItem.text(
+                html,
+                "text/html"
             )
         ]);
     }

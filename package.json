@@ -83,12 +83,19 @@
         "selector": [
           {
             "filenamePattern": "*.dbnb"
-          },
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "type": "databricks-python-renderer",
+        "displayName": "Databricks Python Notebook",
+        "selector": [
           {
             "filenamePattern": "*.py"
           }
         ],
-        "priority": "default"
+        "priority": "option"
       }
     ],
     "menus": {

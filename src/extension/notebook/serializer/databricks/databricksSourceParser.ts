@@ -1,10 +1,23 @@
-import { DATABRICKS_COMMAND_SEPARATOR, DATABRICKS_NOTEBOOK_HEADER, DatabricksSourceCell } from "./databricksSourceFormat";
+import { 
+    DATABRICKS_CELL_TITLE, 
+    DATABRICKS_COMMAND_SEPARATOR, 
+    DATABRICKS_NOTEBOOK_HEADER, 
+    DatabricksSourceCell, 
+    DatabricksSourceCellKind } from "./databricksSourceFormat";
+
+
+class DatabricksSourceCellBuilder {
+    public kind = DatabricksSourceCellKind.Code;
+    public languageId = "python";
+    public title?: string;
+    public readonly sourceLines: string[] = [];
+}
 
 export class DatabricksSourceParser  {
 
     public parse(source: string): DatabricksSourceCell[] {
-        // Implementation will go here
-        return [];
+        const cellSources = this.parseSourceCells(this.normalizeSource(source));
+        return cellSources.map(cellSource => this.parseCell(cellSource));
     }
 
     private normalizeSource(source: string): string {
@@ -15,7 +28,7 @@ export class DatabricksSourceParser  {
 
     private splitIntoCellSources(source: string): string[] {
         const lines = source.split("\n");
-        if (lines.length === 0 && lines[0].trim() === DATABRICKS_NOTEBOOK_HEADER) {
+        if (lines.length > 0 && lines[0].trim() === DATABRICKS_NOTEBOOK_HEADER) {
             lines.shift();
         }
 
@@ -33,26 +46,82 @@ export class DatabricksSourceParser  {
         return cells.map(cell => this.cleanCellSource(cell.join("\n")));
     }
 
-    private parseCell(source: string): DatabricksSourceCell {
-        const magicLines = this.decodeMagicLines(source);
-        if (!magicLines) {
-            return {
-                kind: "code",
-                languageId: "python",
-                source: source
-            };
+    private parseSourceCells(source: string): DatabricksSourceCellBuilder[] {
+        const lines = source.split('\n');
+        const cells: DatabricksSourceCellBuilder[] = [new DatabricksSourceCellBuilder()];
+        let currentCellIndex = 0;
+
+        for(let index = 0; index < lines.length; index++){
+            const line = lines[index];
+
+            if(index === 0 && line.trim() === DATABRICKS_NOTEBOOK_HEADER){
+                continue;
+            }
+            if(line.trim() === DATABRICKS_COMMAND_SEPARATOR){
+                cells.push(new DatabricksSourceCellBuilder());
+                currentCellIndex = cells.length - 1;
+                continue;
+            }
+            const titleMatch = line.match(/^# DBTITLE 1,(.*)$/);
+            if(titleMatch){
+                cells[currentCellIndex].title = titleMatch[1];
+                continue;
+            }
+
+            const magicMatch = line.match(/^# MAGIC(?: ?(.*))?$/);
+            if(magicMatch){
+                this.applyMagicLine(cells[currentCellIndex], magicMatch[1] ?? "");
+                continue;
+            }
+
+            cells[currentCellIndex].sourceLines.push(line);
         }
 
-        const magicCell = this.parseMagicDirective(magicLines);
-        if (magicCell) {
-            return magicCell;
+        const lastCell = cells[cells.length - 1];
+
+        if (
+            lastCell &&
+            !lastCell.title &&
+            lastCell.sourceLines.length === 0
+        ) {
+            cells.pop();
         }
 
+        return cells
+
+    }
+
+    private applyMagicLine(cell: DatabricksSourceCellBuilder, magicLine: string): void {
+
+        const magicDirective = magicLine.match(/^%(md|markdown|python|sql|scala|r)\b(.*)$/i);
+        if (!magicDirective) {
+            cell.sourceLines.push(magicLine);
+            return;
+        }
+
+        const language = magicDirective[1].toLowerCase();
+        const inlineSource = magicDirective[2].trimStart();
+
+        if (language === "md" || language === "markdown") {
+            cell.kind = DatabricksSourceCellKind.Markdown;
+            cell.languageId = "markdown";
+        } else {
+            cell.kind = DatabricksSourceCellKind.Code;
+            cell.languageId = language;
+        }
+
+        if (inlineSource.length > 0) {
+            cell.sourceLines.push(inlineSource);
+        }
+    }
+
+    private parseCell(cellBuilder: DatabricksSourceCellBuilder): DatabricksSourceCell {
         return {
-            kind: "code",
-            languageId: "python",
-            source: magicLines.join("\n")
-        };
+            kind: cellBuilder.kind,
+            languageId: cellBuilder.languageId,
+            source: this.cleanCellSource(cellBuilder.sourceLines.join("\n")),
+            title: cellBuilder.title
+        }
     }
 
     private cleanCellSource(source: string): string {
@@ -95,14 +164,14 @@ export class DatabricksSourceParser  {
 
         if(magic === "md" || magic === "markdown"){
             return {
-                kind: "markdown",
+                kind: DatabricksSourceCellKind.Markdown,
                 languageId: "markdown",
                 source: source
             };
         }
 
         return {
-            kind: "code",
+            kind: DatabricksSourceCellKind.Code,
             languageId: magic,
             source: source
         };

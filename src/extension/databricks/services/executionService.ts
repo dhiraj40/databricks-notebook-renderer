@@ -1,8 +1,9 @@
 import { CommandApi } from "../api/commandApi";
 import { Connection } from "../models/connection";
-import { ExecutionResult } from "../../notebook/models/executionResult";
+import { DatabricksTableColumn, ExecutionResult } from "../models/executionResult";
 import { CommandResultType, CommandStatus } from "../models/command";
 import { Session } from "../models/session";
+import { TableOutputFormatter } from "../utils/tableOutputFormatter";
 
 export class ExecutionService {
     constructor(
@@ -37,33 +38,20 @@ export class ExecutionService {
 
         switch (result.status) {
             case CommandStatus.Finished:
-                if (result.resultType === CommandResultType.Text) {
-                    return {
-                        success: true,
-                        output: result.data ?? ""
-                    };
-                }
-                if (result.resultType === CommandResultType.Error) {
-                    return {
-                        success: false,
-                        error: result.error ?? "Command execution failed."
-                    };
-                }
-                throw new Error(
-                    `Unsupported command result type: ${result.resultType ?? "unknown"}`
-                );
-
+                return this.getFinishedResult(result);
             case CommandStatus.Error:
                 return {
                     success: false,
-                    error: result.error ?? "Command execution failed."
+                    error: result.error ?? "Command execution failed.",
+                    resultType: "error"
                 };
 
             case CommandStatus.Cancelled:
                 return {
                     success: false,
                     output: "",
-                    error: "Command was cancelled."
+                    error: "Command was cancelled.",
+                    resultType: "text"
                 };
 
             default:
@@ -72,6 +60,35 @@ export class ExecutionService {
                 );
         }
 
+    }
+
+    private getFinishedResult(result: any): ExecutionResult {
+        console.log(result);
+        if (result.resultType === CommandResultType.Text) {
+            return {
+                success: true,
+                output: result.data ?? "",
+                resultType: CommandResultType.Text
+            };
+        }
+        if (result.resultType === CommandResultType.Error) {
+            return {
+                success: false,
+                error: result.error ?? "Command execution failed.",
+                resultType: CommandResultType.Error
+            };
+        }
+        if (result.resultType === CommandResultType.Table) {
+            const output = TableOutputFormatter.toHtmlTable(result.data?.schema, result.data?.data);
+            return {
+                success: true,
+                output: output,
+                resultType: CommandResultType.Table
+            };
+        }
+        throw new Error(
+            `Unsupported command result type: ${result.resultType ?? "unknown"}`
+        );
     }
 
     private async delay(milliseconds: number): Promise<void>{

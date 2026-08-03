@@ -4,7 +4,7 @@ import { AuthService } from "../../databricks/auth/authService";
 import { ComputeService } from "../../databricks/services/computeService";
 import { ExecutionService } from "../../databricks/services/executionService";
 import { SessionService } from "../../databricks/services/sessionService";
-import { ExecutionResult } from "../models/executionResult";
+import { ExecutionResult } from "../../databricks/models/executionResult";
 import { NotebookContextState } from "../state/notebookContextState";
 
 export class CellExecutionService {
@@ -19,7 +19,12 @@ export class CellExecutionService {
 
     }
 
+
     public async executeCell(code: string, notebookId: string, language:string = "python"): Promise<ExecutionResult>{
+        const unsupportedCommandResult = this.checkForUnsupportedCommands(code, language);
+        if (unsupportedCommandResult) {
+            return unsupportedCommandResult;
+        }
         const connection =  await this.authService.getConnection();
         if(!connection){
             throw new Error("Not connected to Databricks.");
@@ -49,5 +54,15 @@ export class CellExecutionService {
             this.eventBus.emit(ExtensionEvents.sessionChanged);
         }
         return this.executionService.execute(connection, selectedCompute.id, context.session, code, language);
+    }
+
+    private checkForUnsupportedCommands(code: string, language: string): ExecutionResult | undefined {
+        if (code.trimStart().startsWith("%run")) {
+            return {
+                success: true,
+                error: "%run is not supported yet from VS Code execution because relative notebook paths require a Databricks workspace notebook path."
+            };
+        }
+        return undefined;
     }
 }
