@@ -23,29 +23,26 @@
     "Other"
   ],
   "activationEvents": [
-    "onNotebook:databricks-notebook-renderer",
-    "onCommand:databricksNotebookRenderer.toggleNotebookView",
-    "onCommand:databricksNotebookRenderer.openAsNotebook"
+    "onStartupFinished"
   ],
   "main": "./out/extension/extension.js",
   "browser": "./out/extension/extension.web.js",
   "contributes": {
     "commands": [
       {
-        "command": "databricksNotebookRenderer.refreshClusters",
-        "title": "Databricks Notebook: Refresh Clusters"
+        "command": "databricksNotebookRenderer.connect",
+        "title": "Connect",
+        "icon": "$(plug)"
       },
       {
-        "command": "databricksNotebookRenderer.previewPythonSource",
-        "title": "Databricks Notebook: Preview Python Source"
+        "command": "databricksNotebookRenderer.disconnect",
+        "title": "Disconnect",
+        "icon": "$(debug-disconnect)"
       },
       {
-        "command": "databricksNotebookRenderer.toggleNotebookView",
-        "title": "Databricks Notebook: Toggle Notebook View"
-      },
-      {
-        "command": "databricksNotebookRenderer.openAsNotebook",
-        "title": "Databricks Notebook: Open as Notebook"
+        "command": "databricksNotebookRenderer.selectCompute",
+        "title": "Select Compute",
+        "icon": "$(server)"
       }
     ],
     "configuration": {
@@ -80,10 +77,19 @@
       }
     ],
     "notebooks": [
-      
       {
         "type": "databricks-notebook-renderer",
         "displayName": "Databricks Source Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.dbnb"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "type": "databricks-python-renderer",
+        "displayName": "Databricks Python Notebook",
         "selector": [
           {
             "filenamePattern": "*.py"
@@ -93,30 +99,39 @@
       }
     ],
     "menus": {
-      "notebook/toolbar": [
+      "view/title": [
         {
-          "command": "databricksNotebookRenderer.toggleNotebookView",
-          "when": "notebookType == databricks-notebook-renderer",
+          "command": "databricksNotebookRenderer.connect",
+          "when": "view == databricksExplorer",
           "group": "navigation"
         },
         {
-          "command": "databricksNotebookRenderer.previewPythonSource",
-          "when": "notebookType == databricks-notebook-renderer",
+          "command": "databricksNotebookRenderer.disconnect",
+          "when": "view == databricksExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "databricksNotebookRenderer.selectCompute",
+          "when": "view == databricksExplorer",
           "group": "navigation"
         }
-      ],
-      "editor/title": [
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
         {
-          "command": "databricksNotebookRenderer.toggleNotebookView",
-          "when": "resourceExtname == .py",
-          "group": "navigation"
+          "id": "databricks",
+          "title": "Databricks",
+          "icon": "logo.png"
         }
-      ],
-      "explorer/context": [
+      ]
+    },
+    "views": {
+      "databricks": [
         {
-          "command": "databricksNotebookRenderer.openAsNotebook",
-          "when": "resourceExtname == .py",
-          "group": "navigation"
+          "id": "databricksExplorer",
+          "name": "Databricks",
+          "icon": "logo.png"
         }
       ]
     }
@@ -132,7 +147,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^20.19.39",
+    "@types/node": "^20.19.43",
     "@types/vscode": "^1.101.0",
     "@types/vscode-notebook-renderer": "^1.72.3",
     "@types/webpack-env": "^1.18.8",

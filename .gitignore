@@ -2,6 +2,7 @@
 out/
 dist/
 coverage/
+example/
 
 # Dependencies
 node_modules/
