@@ -1,86 +1,168 @@
-# Databricks Notebook Renderer
+# Databricks Notebook Renderer — Release 2.0
 
-A VS Code extension for connecting to Databricks, selecting a classic cluster, and running notebook cells remotely.
+Release 2.0 brings a more complete Databricks notebook experience directly inside Visual Studio Code. You can connect to Databricks, select compute, open supported notebook files, execute cells on a Databricks cluster, and view execution output without leaving VS Code.
 
-## Current features
+## What’s New
 
-- Opens `*.dbnb` files in the VS Code notebook editor.
-- Stores notebook cells as JSON with their language and source value.
-- Connects to a Databricks workspace using its URL and a personal access token (PAT).
-- Stores connection credentials in VS Code Secret Storage.
-- Lists available classic Databricks clusters and persists the selected cluster for the workspace.
-- Executes Python cells remotely through the Databricks command-execution API.
-- Reuses a remote command context for each notebook and language combination.
-- Cleans up active command contexts when disconnecting.
-- Shows Databricks connection and selected-compute status in the activity-bar view and VS Code status bar.
-- Displays text and error cell output in the notebook editor.
-- Includes a notebook output renderer that formats JSON output in a code block.
+### Databricks Connection
 
-## Planned: Databricks Python source notebooks
+You can now connect your VS Code workspace to Databricks using your workspace URL and access token.
 
-Support for Databricks `*.py` source notebooks is planned before release. This will include recognizing the Databricks source header and cell separators, opening the file as a notebook, and serializing edits back to Databricks Python source format.
+Once connected, the extension validates your credentials and stores them securely using VS Code Secret Storage.
 
-Until that work is complete, `*.dbnb` is the supported notebook file format.
+### Compute Selection
 
-## Prerequisites
+You can select a Databricks compute target from VS Code.
 
-- Node.js 20 or later
-- npm
-- VS Code 1.101 or later
-- A Databricks workspace and personal access token
-- Access to a running classic Databricks cluster for remote execution
+The selected compute is remembered for the workspace, so you do not need to select it again every time you restart VS Code.
 
-## Development setup
+### Notebook Cell Execution
 
-```powershell
-npm install
-npm run compile
+Notebook cells can now be executed directly on Databricks compute.
+
+Supported languages:
+
+- Python
+- SQL
+- Scala
+- R
+
+The extension creates and reuses a Databricks execution session for each notebook and language combination.
+
+### Databricks Source Notebook Support
+
+Release 2.0 adds support for Databricks source-style Python notebooks.
+
+Supported file types:
+
+- `.dbnb`
+- `.py`
+
+Databricks source notebooks using markers such as the following can now be opened as notebooks:
+
+```python
+# Databricks notebook source
+# COMMAND ----------
+# MAGIC %md
 ```
 
-Press `F5` in VS Code to start an Extension Development Host.
+### Markdown and Magic Cell Support
 
-## Using the extension
+The extension can detect Databricks magic commands in source notebooks, including markdown cells.
 
-1. In the Extension Development Host, open a `*.dbnb` file.
-2. Open the **Databricks** activity-bar view.
-3. Select **Connect** and enter the workspace URL and personal access token.
-4. Select **Select Compute**, then choose a Databricks cluster.
-5. Run a Python cell in the notebook editor.
+Examples:
 
-The extension creates a remote Python command context the first time a notebook cell runs and reuses it for later cells in the same notebook. Selecting **Disconnect** closes active contexts and removes the saved connection credentials.
-
-## Commands
-
-- `Databricks Notebook Renderer: Connect`
-- `Databricks Notebook Renderer: Disconnect`
-- `Databricks Notebook Renderer: Select Compute`
-
-## Configuration
-
-The extension currently has no required settings. Connection credentials are requested interactively and are stored securely by VS Code. The selected compute ID is stored in workspace state.
-
-## Development commands
-
-```powershell
-npm run compile
-npm run lint
-npm test
+```python
+# MAGIC %md
+# MAGIC ## My Markdown Cell
 ```
 
-## Project structure
+```python
+# MAGIC %sql
+# MAGIC SELECT * FROM table_name
+```
 
-- `src/extension/extension.ts` - extension activation and service wiring
-- `src/extension/databricks/` - Databricks APIs, authentication, compute, sessions, and execution services
-- `src/extension/notebook/` - notebook serialization, execution, output, and session-context handling
-- `src/extension/ui/` - Databricks sidebar and status-bar UI
-- `src/client/` - notebook output renderer webview client
+### Rich Output Improvements
 
-## Limitations
+Notebook output rendering has been improved.
 
-- Only Python cell execution is currently registered by the notebook controller.
-- Remote execution uses classic Databricks clusters and command contexts.
-- The custom renderer currently presents JSON as formatted text; richer Databricks-style visual output is not yet implemented.
+Supported output types include:
 
-## License
+- Text output
+- Error output
+- HTML output
+- Table output
 
-[MIT](LICENSE)
+Databricks table results are rendered as tables in VS Code notebook output.
+
+### Databricks Sidebar
+
+A new Databricks sidebar view helps you see the current extension state.
+
+The sidebar shows:
+
+- Connection status
+- Selected compute
+- Active notebook sessions
+- Notebook language sessions
+
+## How to Use
+
+### 1. Connect to Databricks
+
+Run the command:
+
+```text
+Databricks Notebook Renderer: Connect
+```
+
+Enter your Databricks workspace URL and access token when prompted.
+
+### 2. Select Compute
+
+Run the command:
+
+```text
+Databricks Notebook Renderer: Select Compute
+```
+
+Choose the cluster where notebook cells should run.
+
+### 3. Open a Notebook
+
+Open a supported notebook file:
+
+```text
+.dbnb
+.py
+```
+
+For Databricks source Python notebooks, choose the Databricks notebook editor when VS Code asks how to open the file.
+
+### 4. Run Cells
+
+Use the notebook cell run button or VS Code notebook shortcuts to execute cells.
+
+Cells are executed on the selected Databricks compute.
+
+### 5. Disconnect
+
+Run the command:
+
+```text
+Databricks Notebook Renderer: Disconnect
+```
+
+This clears the active connection and session state.
+
+## Notes and Limitations
+
+### `.ipynb` Files
+
+Standard `.ipynb` files are still handled by the normal VS Code/Jupyter notebook experience.
+
+The extension does not replace the default Jupyter serializer for `.ipynb` files.
+
+### `%run` Support
+
+The `%run` magic command is not fully supported yet from local VS Code execution because relative notebook paths require a Databricks workspace notebook path.
+
+### Serverless Compute
+
+This release focuses on Databricks cluster-backed execution. Serverless notebook compute is not exposed yet.
+
+### Local Folder Mounting
+
+Local folders are not mounted directly into Databricks runtime. Code and files need to be available to Databricks through supported workspace, DBFS, or volume-based workflows.
+
+## Summary
+
+Release 2.0 turns the extension into a usable Databricks notebook workflow inside VS Code:
+
+- Connect to Databricks
+- Select compute
+- Open Databricks notebooks
+- Execute notebook cells remotely
+- View text, error, HTML, and table output
+- Track connection, compute, and sessions from the sidebar
+
